@@ -1,0 +1,868 @@
+---
+title: "ST492 Final Project"
+author: "Scott McGrouther"
+date: "2024-03-03"
+output: html_document
+---
+
+# 0) Prerequisites
+
+# Imports
+
+```{r}
+
+library("readxl")
+library("tidyverse")
+library("TSA")
+
+install.packages("forecast")
+library("forecast")
+
+install.packages("tseries")
+library(tseries)
+
+search()
+
+```
+
+# Importing the Data Set
+
+```{r}
+
+data <- read_excel("C:/Users/scott/OneDrive/Desktop/SEMESTER 2/ST 492/Project/Project Data - ST 492!.xlsx")
+
+data
+
+```
+
+# Variables and TS Creation
+
+```{r}
+
+# Get Variables
+time_all <- data$Date
+prices_all <- data$Average
+
+length(time_all)
+#time_all
+
+print("-------------------------------------------------------")
+
+#prices_all
+
+time <- time_all[1:105]
+prices <- prices_all[1:105]
+
+print("-------------------------------------------------------")
+
+#time
+
+print("-------------------------------------------------------")
+
+#prices
+
+print("-------------------------------------------------------")
+
+# Make a Time Series Variable
+
+prices_ts <- ts(prices, frequency = 52, start = c(2018, 1))
+
+prices_ts
+
+print("-------------------------------------------------------")
+
+prices_ts_all <- ts(prices_all, frequency = 52, start = c(2018, 1))
+
+prices_ts_all
+
+print("-------------------------------------------------------")
+
+length(prices_all) 
+length(prices)
+
+```
+
+# Validation
+
+```{r}
+
+# Time Series ACF's Trimmed Data
+
+acf(prices_ts)
+
+acf(diff(prices_ts))
+
+acf(diff(prices_ts, lag = 52))
+
+# Time Series ACF's Entire Data
+
+acf(prices_ts_all)
+
+acf(diff(prices_ts_all))
+
+acf(diff(prices_ts_all, lag = 52))
+
+```
+
+# Understanding the Data
+
+```{r}
+
+# Understaning the COVID-19 Spike
+
+max(prices_ts_all)
+min(prices_ts_all)
+
+# Plotting the Data
+
+plot(prices_ts, type = "o", xlab = "Year", ylab = "Price", main = "Air Canada Prices Over Time Before COVID-19 Spike")
+
+points(y=prices_ts, x=time(prices_ts), pch = as.vector(season(prices_ts)), col=4, cex = 0.8)
+
+plot(prices_ts_all, type = "o", xlab = "Year", ylab = "Price", main = "Air Canada Prices Over Time with COVID-19 Spike")
+
+points(y=prices_ts_all, x=time(prices_ts_all), pch = as.vector(season(prices_ts_all)), col=4, cex = 0.8)
+
+```
+
+
+
+
+
+
+# 1) Model Identification
+
+# Regression Approach
+
+# Decomposition
+
+```{r}
+
+# Modeling Trend 
+
+decomposition <- decompose(prices_ts)
+
+plot(decomposition)
+
+total <- diff(range(prices_ts))
+
+trend <- diff(range(decomposition$trend, na.rm=T))
+seasonal <- diff(range(decomposition$seasonal, na.rm=T))
+random <- diff(range(decomposition$random, na.rm=T))
+
+print("Total")
+print(total)
+print(paste(total/total * 100,"%"))
+print("--------------------------------------")
+print("Trend")
+print(trend)
+print(paste(trend/total * 100,"%"))
+print("--------------------------------------")
+print("Seasonal")
+print(seasonal)
+print(paste(seasonal/total * 100,"%"))
+print("--------------------------------------")
+print("Random")
+print(random)
+print(paste(random/total * 100,"%"))
+
+```
+
+# Trend Models
+
+```{r}
+
+# We Will Fit the First Five Polynomial Regression Models and See if There is Significant Differences Between Them Before Deciding
+
+
+ti <- as.vector(time(prices_ts))
+
+# Linear Model - RED
+
+reg1 <- lm(prices_ts ~ ti)
+
+summary(reg1)
+plot(prices_ts, main = "Air Canada Stock Prices Over Time", type = "o")
+lines(x=ti, y=predict(reg1), lty=2, col=2)
+
+print("----------------------------------------------------------------------")
+
+
+# Quadratic Model
+
+reg2 <- lm(prices_ts ~ ti + I(ti^2))
+
+plot(prices_ts, main = "Air Canada Stock Prices Over Time", type = "o")
+lines(x=ti, y=predict(reg2), lty=2, col="Green")
+summary(reg2)
+
+print("----------------------------------------------------------------------")
+
+
+# Cubic Model
+
+reg3 <- lm(prices_ts ~ ti + I(ti^2) + I(ti^3))
+
+plot(prices_ts, main = "Air Canada Stock Prices Over Time", type = "o")
+lines(x=ti, y=predict(reg3), lty=2, col="Blue")
+summary(reg3)
+
+print("----------------------------------------------------------------------")
+
+
+# Quartic Model
+
+reg4 <- lm(prices_ts ~ ti + I(ti^2) + I(ti^3) + I(ti^4))
+
+plot(prices_ts, main = "Air Canada Stock Prices Over Time", type = "o")
+lines(x=ti, y=predict(reg4), lty=2, col="Orange")
+summary(reg4)
+
+print("----------------------------------------------------------------------")
+
+
+# Quintic Model
+
+reg5 <- lm(prices_ts ~ ti + I(ti^2) + I(ti^3) + I(ti^4) + I(ti^5))
+
+plot(prices_ts, main = "Air Canada Stock Prices Over Time", type = "o")
+lines(x=ti, y=predict(reg5), lty=2, col="Orange")
+summary(reg5)
+
+
+```
+
+
+# Seasonality Models
+
+```{r}
+
+# Weekly
+
+weeks <- season(prices_ts)
+
+model_season <- lm(prices_ts ~ weeks)
+
+summary(model_season)
+
+plot(prices_ts, xlab = "Week", ylab = "Air Canada Stock Prices Over Time", type = "p")
+
+lines(ti, predict(model_season), lty = 2, col = 2)
+
+
+```
+
+# Combining Both
+
+```{r}
+
+model_regression <- lm(prices_ts ~ weeks + ti + I(ti^3))
+
+summary(model_regression)
+
+plot(prices_ts, xlab = "Week", ylab = "Air Canada Stock Prices Over Time", type = "p")
+
+lines(ti, predict(model_regression), lty = 2, col = 2)
+
+# Not worth all of the variables
+
+```
+
+
+
+
+
+# ARIMA Approach
+
+# Normal TS
+
+```{r}
+
+# Checking Stationary
+
+# Recall
+
+plot(prices_ts, type = "o", xlab = "Year", ylab = "Price", main = "Air Canada Prices Over Time Before COVID-19 Spike")
+
+acf(prices_ts)
+
+pacf(prices_ts)
+
+eacf(prices_ts)
+
+plot(armasubsets(prices_ts, nar=12, nma=12))
+
+adf_result <- adf.test(prices_ts, alternative = "stationary", k = 1)
+
+print(adf_result)
+
+# Obviously NOT Stationary - First We Attempt the Box Cox
+
+BC <- BoxCox.ar(prices_ts, lambda=seq(-2,2,0.1))
+
+print(BC$mle)
+
+print(BC$ci)
+
+```
+
+# Differenced TS
+
+```{r}
+
+# Difference
+
+diff_series <- diff(prices_ts)
+
+plot(diff_series, type = "o", xlab = "Year", ylab = "Price", main = "Air Canada Prices Over Time Before COVID-19 Spike")
+
+acf(diff_series)
+
+pacf(diff_series)
+
+eacf(diff_series)
+
+plot(armasubsets(diff_series, nar=12, nma=12))
+
+adf_result2 <- adf.test(diff_series, alternative = "stationary", k = 1)
+
+print(adf_result2)
+
+```
+
+
+# Log Return Series
+
+```{r}
+
+# Additional Test - Based on FM Theory
+
+log_return <- diff(log(prices_ts))
+
+plot(log_return, type = "o", xlab = "Year", ylab = "Price", main = "Air Canada Prices Over Time Before COVID-19 Spike")
+
+acf(log_return)
+
+pacf(log_return)
+
+eacf(log_return)
+
+plot(armasubsets(log_return, nar=12, nma=12))
+
+adf_result5 <- adf.test(log_return, alternative = "stationary", k = 1)
+
+print(adf_result5)
+
+
+```
+
+
+
+
+
+
+
+
+# 2) Model Fitting
+
+# Regression Approach
+
+# FINAL REGRESSION MODEL
+
+```{r}
+
+# Thus, We Obtain:
+
+REG <- lm(prices_ts ~ ti + I(ti^3))
+
+summary(REG)
+
+plot(prices_ts, xlab = "Week", ylab = "Air Canada Stock Prices Over Time", type = "p")
+
+lines(ti, predict(REG), lty = 2, col = 2)
+
+```
+
+
+
+
+
+
+
+# ARIMA Approach
+
+# FINAL ARIMA MODELS
+
+```{r}
+
+# Thus, We Obtain:
+
+IMA <- arima(x = prices_ts, order = c(0,1,1))
+
+ARI <- arima(x = prices_ts, order = c(1,1,0))
+
+IMA_2 <- arima(x = prices_ts, order = c(0,1,2))
+
+ARI_2 <- arima(x = prices_ts, order = c(2,1,0))
+
+ARIMA <- arima(x = prices_ts, order = c(1,1,1))
+
+SIMA <- arima(x = prices_ts, order = c(0,1,0), seasonal=list(order=c(0,0,1), period=12))
+
+SIMA_2 <- arima(x = prices_ts, order = c(0,1,0), seasonal=list(order=c(0,0,2), period=12))
+
+SIMA_3 <- arima(x = prices_ts, order = c(0,1,0), seasonal=list(order=c(0,0,3), period=12))
+
+LOG_IMA <- arima(x = log(prices_ts), order = c(0,1,1))
+
+LOG_IMA_2 <- arima(x = log(prices_ts), order = c(0,1,2))
+
+LOG_ARI <- arima(x = log(prices_ts), order = c(1,1,0))
+
+LOG_ARI_2 <- arima(x = log(prices_ts), order = c(2,1,0))
+
+LOG_ARIMA <- arima(x = log(prices_ts), order = c(1,1,1))
+
+LOG_SIMA <- arima(x = log(prices_ts), order = c(0,1,0), seasonal=list(order=c(0,0,1), period=12))
+
+LOG_SIMA_2 <- arima(x = log(prices_ts), order = c(0,1,0), seasonal=list(order=c(0,0,2), period=12))
+
+LOG_SIMA_3 <- arima(x = log(prices_ts), order = c(0,1,0), seasonal=list(order=c(0,0,3), period=12))
+
+IMA
+
+print("---------------------------------------------------------------------------------------------------")
+
+IMA_2
+
+print("---------------------------------------------------------------------------------------------------")
+
+ARI
+
+print("---------------------------------------------------------------------------------------------------")
+
+ARI_2
+
+print("---------------------------------------------------------------------------------------------------")
+
+ARIMA
+
+print("---------------------------------------------------------------------------------------------------")
+
+SIMA
+
+print("---------------------------------------------------------------------------------------------------")
+
+SIMA_2
+
+print("---------------------------------------------------------------------------------------------------")
+
+SIMA_3
+
+print("---------------------------------------------------------------------------------------------------")
+
+LOG_IMA
+
+print("---------------------------------------------------------------------------------------------------")
+
+LOG_IMA_2
+
+print("---------------------------------------------------------------------------------------------------")
+
+LOG_ARI
+
+print("---------------------------------------------------------------------------------------------------")
+
+LOG_ARI_2
+
+print("---------------------------------------------------------------------------------------------------")
+
+LOG_ARIMA
+
+print("---------------------------------------------------------------------------------------------------")
+
+LOG_SIMA
+
+print("---------------------------------------------------------------------------------------------------")
+
+LOG_SIMA_2
+
+print("---------------------------------------------------------------------------------------------------")
+
+LOG_SIMA_3
+
+```
+
+
+
+
+
+# 3) Model Checking
+
+# Regression Approach
+
+# CHECKING THE MODEL - REG
+
+```{r}
+
+# Recall:
+
+summary(REG)
+
+plot(prices_ts, xlab = "Week", ylab = "Air Canada Stock Prices Over Time", type = "p")
+
+lines(ti, predict(REG), lty = 4, col = 2)
+
+# Needed
+
+residual_REG <- residuals(REG)
+predicted_REG <- predict(REG)
+
+
+# Normality
+
+dev.new(width=8, height = 4)
+hist(residual_REG, main = "Air Canada Stock: Residuals", xlab = "Residuals")
+qqnorm(residual_REG)
+qqline(residual_REG)
+shapiro.test(residual_REG)
+
+# Constant Variance
+
+plot(predicted_REG, residual_REG, main = "Fitted Versus Residuals" , xlab = "Fitted", ylab = "Residuals")
+
+# White Noise
+
+plot(residual_REG, ylab = "Residuals", main = "Residuals" )
+acf(residual_REG, main = "ACF of Residuals")
+
+# Runs Test of Independence
+
+print("----------------------------------------------------------------------")
+
+runs(residual_REG)
+
+```
+
+
+# ARIMA Approach
+
+# Function for a General Model 
+
+```{r}
+
+residual_analysis <- function(model, prices_ts, ti){
+  
+  # Needed
+  
+  residual <- rstandard(model) # Residual
+  rez <- residuals(model)
+  
+  fitted_model <- prices_ts - rez
+
+  # Plotting
+  
+  plot(prices_ts, xlab = "Week", ylab = "Air Canada Stock Prices Over Time", type = "p")
+  lines(ti, fitted_model, lty = 4, col = 2)
+  
+  # Normality
+  
+  hist(residual, main = "Air Canada Stock: Residuals", xlab = "Residuals")
+  qqnorm(residual)
+  qqline(residual)
+  print(shapiro.test(residual))
+  
+  # Constant Variance
+  
+  print(as.vector(fitted_model))
+  print(length(as.vector(fitted_model)))
+  print(length(as.vector(residual)))
+  
+  plot(as.vector(fitted_model), as.vector(residual), main = "Fitted Versus Residuals" , xlab = "Fitted", ylab = "Residuals")
+  
+  # White Noise
+  
+  plot(residual, ylab = "Residuals", main = "Residuals" )
+  acf(residual, main = "ACF of Residuals")
+  
+  
+  # Ljung-Box Test
+  
+  
+  LBpvals <- rep(NA, 15)
+  
+  for(i in 5:15){
+    LBpvals[i] <- LB.test(model, lag = i)$p.value
+    
+  }
+  
+  plot(LBpvals, ylim = c(0,1), main = "P-Values from LB Test", ylab = "P-Values", xlab = "Lag")
+  abline(h = 0.05, lty = 2, col = "red")
+  
+  
+  # Runs Test of Independence
+  
+  print(runs(residual))
+  
+  # At Once - HARD TO SEE
+  
+  tsdiag(model)
+  
+  
+}
+
+```
+
+# IMA(0,1,1) - IMA
+
+```{r}
+
+residual_analysis(IMA, prices_ts, ti)
+
+```
+# ARI(1,1,0) - ARI
+
+```{r}
+
+ARI
+residual_analysis(ARI, prices_ts, ti)
+
+```
+
+# SARIMA(0,1,1)_12 - SIMA
+
+```{r}
+
+SIMA
+residual_analysis(SIMA, prices_ts, ti)
+
+```
+
+# Log Return Model - IMA
+
+```{r}
+
+LOG_IMA
+residual_analysis(LOG_IMA, prices_ts, ti)
+
+```
+
+# Log Return Model - ARI
+
+```{r}
+
+LOG_ARI
+residual_analysis(LOG_ARI, prices_ts, ti)
+
+```
+
+# Log SARIMA(0,1,1)_12 - LOG_SIMA
+
+```{r}
+
+LOG_SIMA
+residual_analysis(LOG_SIMA, prices_ts, ti)
+
+```
+
+
+
+# 4) Predictions
+
+# Chosen Models
+
+# - REGRESSION
+
+```{r}
+
+REG
+
+print("--------------------------------------------------------------")
+
+summary(REG)
+
+# REGRESSION FUNCTION 
+
+REGRESSION <- function(REG, new_data){
+  
+  coefficients <- coef(REG)
+  
+  Y <- coefficients[1] + coefficients[2] * new_data + coefficients[3]*new_data^3
+  
+  return(Y)
+  
+} 
+
+# Creating a Zoom in Vector
+
+prices_ts_visual <- ts(prices_all[100:157], frequency = 52, start = c(2019, 48))
+
+ti_all <- as.vector(time(prices_ts_all))
+ti_visual <- as.vector(time(prices_ts_visual))
+
+
+# Seeing the Forecast On Training Data
+
+plot(prices_ts, type = "l", ylim = c(10,100),
+     xlab = "Time", ylab = "Air Canada Stock Prices",
+     main = "Regression Model over Training Data Time Period")
+
+lines(ti, REGRESSION(REG, ti), lty = 4, col = 2)
+legend("topleft", legend = c("Regression"),
+       col = c("red"), lty = c(4))
+# Normal Data
+
+plot(prices_ts_all, type = "l", ylim = c(10,100),
+     xlab = "Time", ylab = "Air Canada Stock Prices",
+     main = "Regression Model over Entire Data Time Period")
+
+lines(ti_all, REGRESSION(REG, ti_all), lty = 4, col = 2)
+legend("topleft", legend = c("Regression"),
+       col = c("red"), lty = c(4))
+
+# Zoomed
+
+plot(prices_ts_visual, type = "l", ylim = c(10,100),
+     xlab = "Time", ylab = "Air Canada Stock Prices",
+     main = "Regression Model over Zoomed Data Time Period")
+
+lines(ti_visual, REGRESSION(REG, ti_visual), lty = 4, col = 2)
+legend("topleft", legend = c("Regression"),
+       col = c("red"), lty = c(4))
+
+
+```
+
+# - IMA
+
+```{r}
+
+IMA
+
+# Formula
+
+prices_ts[105] + 0.3242*rstandard(IMA)[105]
+
+# Getting Values
+
+IMA_predictions <- predict(IMA, n.ahead = 52, se.fit = TRUE)
+
+predicted_values <- IMA_predictions$pred
+standard_errors <- IMA_predictions$se
+
+upper_bound <- predicted_values + 1.96 * standard_errors
+lower_bound <- predicted_values - 1.96 * standard_errors
+
+#predicted_values
+#upper_bound
+#lower_bound
+
+# Seeing the Forecast On Training Data
+
+plot(prices_ts, type = "l", ylim = c(10,85),
+     xlab = "Time", ylab = "Air Canada Stock Prices",
+     main = "Next 52 Predictions with 95% Prediction Intervals")
+
+lines(predicted_values, col = "blue", lty = 1)
+lines(upper_bound, col = "red", lty = 2)
+lines(lower_bound, col = "red", lty = 2)
+
+legend("topright", legend = c("Predicted", "95% Prediction Interval"),
+       col = c("blue", "red"), lty = c(1, 2))
+
+
+
+# Normal Data
+
+plot(prices_ts_all, type = "l", ylim = c(10,85),
+     xlab = "Time", ylab = "Air Canada Stock Prices",
+     main = "Next 52 Predictions with 95% Prediction Intervals, On Training Dataset")
+
+lines(predicted_values, col = "blue", lty = 1)
+lines(upper_bound, col = "red", lty = 2)
+lines(lower_bound, col = "red", lty = 2)
+
+legend("topright", legend = c("Predicted", "95% Prediction Interval, On Entire Dataset"),
+       col = c("blue", "red"), lty = c(1, 2))
+
+
+# Zoomed
+
+plot(prices_ts_visual, type = "l", ylim = c(10,85),
+     xlab = "Time", ylab = "Air Canada Stock Prices",
+     main = "Next 52 Predictions with 95% Prediction Intervals, On Zoomed Dataset")
+
+lines(predicted_values, col = "blue", lty = 1)
+lines(upper_bound, col = "red", lty = 2)
+lines(lower_bound, col = "red", lty = 2)
+
+legend("topright", legend = c("Predicted", "95% Prediction Interval"),
+       col = c("blue", "red"), lty = c(1, 2))
+
+
+```
+
+# - ARI
+
+```{r}
+
+ARI
+
+# Getting Values
+
+ARI_predictions <- predict(ARI, n.ahead = 52, se.fit = TRUE)
+
+predicted_values <- ARI_predictions$pred
+standard_errors <- ARI_predictions$se
+
+upper_bound <- predicted_values + 1.96 * standard_errors
+lower_bound <- predicted_values - 1.96 * standard_errors
+
+#predicted_values
+#upper_bound
+#lower_bound
+
+# Seeing the Forecast On Training Data
+
+plot(prices_ts, type = "l", ylim = c(10,85),
+     xlab = "Time", ylab = "Air Canada Stock Prices",
+     main = "Next 52 Predictions with 95% Prediction Intervals, On Training Dataset")
+
+lines(predicted_values, col = "blue", lty = 1)
+lines(upper_bound, col = "red", lty = 2)
+lines(lower_bound, col = "red", lty = 2)
+
+legend("topright", legend = c("Predicted", "95% Prediction Interval"),
+       col = c("blue", "red"), lty = c(1, 2))
+
+
+
+# Normal Data
+
+plot(prices_ts_all, type = "l", ylim = c(10,85),
+     xlab = "Time", ylab = "Air Canada Stock Prices",
+     main = "Next 52 Predictions with 95% Prediction Intervals, On Entire Dataset")
+
+lines(predicted_values, col = "blue", lty = 1)
+lines(upper_bound, col = "red", lty = 2)
+lines(lower_bound, col = "red", lty = 2)
+
+legend("topright", legend = c("Predicted", "95% Prediction Interval"),
+       col = c("blue", "red"), lty = c(1, 2))
+
+
+# Zoomed
+
+plot(prices_ts_visual, type = "l", ylim = c(10,85),
+     xlab = "Time", ylab = "Air Canada Stock Prices",
+     main = "Next 52 Predictions with 95% Prediction Intervals, On Zoomed Dataset")
+
+lines(predicted_values, col = "blue", lty = 1)
+lines(upper_bound, col = "red", lty = 2)
+lines(lower_bound, col = "red", lty = 2)
+
+legend("topright", legend = c("Predicted", "95% Prediction Interval"),
+       col = c("blue", "red"), lty = c(1, 2))
+
+
+```
